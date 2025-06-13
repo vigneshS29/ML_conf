@@ -6,7 +6,6 @@ from ase.calculators.calculator import Calculator, all_changes
 
 from mol import *
 
-'''
 import logging
 import torch
 import torch._dynamo
@@ -15,7 +14,7 @@ from orb_models.forcefield.calculator import ORBCalculator
 from fairchem.core import FAIRChemCalculator
 from mace.calculators import mace_mp
 torch._dynamo.config.suppress_errors = True
-'''
+
 class OpenBabelUFF_serial(Calculator):
     implemented_properties = ["energy", "forces"]
 
