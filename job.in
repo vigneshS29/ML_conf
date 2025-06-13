@@ -3,7 +3,7 @@
 #SBATCH --job-name=conf_gen
 #SBATCH --output=SLURM.out
 #SBATCH --error=SLURM.err
-#SBATCH -A bsavoie
+#SBATCH -A 
 #SBATCH --nodes=1
 #SBATCH -n 128  
 #SBATCH --time 4:00:00
