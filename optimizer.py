@@ -51,44 +51,63 @@ def cluster_conformers(images, threshold=0.75):
                 picked.append(i)
     return [images[i] for i in picked]
 
-def cluster_RMSD_conformers(images, initial,threshold=0.25):
-
+def cluster_RMSD_conformers(images, initial, threshold=0.25):
+    # Pre-compute initial coordinates once
     initial_coords = initial.get_positions()
     initial_COM = np.mean(initial_coords, axis=0)
-    initial_coords = (initial.get_positions() - initial_COM)
-    initial_coords = initial_coords.reshape(-1)  # Flatten the initial coordinates
-    initial_coords = np.tile(initial_coords, (len(images), 1))  # Repeat initial coordinates for each image
+    initial_coords = (initial_coords - initial_COM).reshape(-1)
     
-    image_coords = np.array([atoms.get_positions() for atoms in images])
-    image_COM =  np.mean(image_coords, axis=1)  
-    image_coords = image_coords - image_COM[:, np.newaxis, :]  # Center each image around its COM
-    image_coords = image_coords.reshape(len(images), -1)  # Flatten each image's coordinates
-
-    #get optimaal rotation matrix for image_coords and initial_coords
-    R, _ = orthogonal_procrustes(initial_coords, image_coords)
-    rotated_image_coords = image_coords @ R.T  # Rotate the image coordinates
-    rmsd_values = np.sqrt(np.mean((rotated_image_coords - initial_coords) ** 2, axis=1))
-
-    selected_indices = np.where(rmsd_values > threshold )[0]
+    # Pre-allocate arrays for all images
+    n_images = len(images)
+    image_coords = np.zeros((n_images, len(initial_coords)))
+    
+    # Process all images at once
+    for i, atoms in enumerate(images):
+        coords = atoms.get_positions()
+        COM = np.mean(coords, axis=0)
+        image_coords[i] = (coords - COM).reshape(-1)
+    
+    # Compute optimal rotation matrix for all images at once
+    R, _ = orthogonal_procrustes(np.tile(initial_coords, (n_images, 1)), image_coords)
+    rotated_coords = image_coords @ R.T
+    
+    # Calculate RMSD for all images at once
+    rmsd_values = np.sqrt(np.mean((rotated_coords - np.tile(initial_coords, (n_images, 1))) ** 2, axis=1))
+    
+    # Get indices of conformers above threshold
+    selected_indices = np.where(rmsd_values > threshold)[0]
     selected_conformers = [images[i] for i in selected_indices]
     selected_conformers = [i for i in selected_conformers if check_molecular_topology(i, initial)]
-
-    #remove images that are too similar to each other using RMSD also minimize rotation 
-    for count_i,i in enumerate(selected_conformers):
-        for count_j,j in enumerate(selected_conformers):
-            if count_i != count_j:
-                coords_i = i.get_positions()
-                coords_j = j.get_positions()
-                coords_i = coords_i - np.mean(coords_i, axis=0)
-                coords_j = coords_j - np.mean(coords_j, axis=0)
-                coords_i = coords_i.reshape(-1,1)
-                coords_j = coords_j.reshape(-1,1)
-                R, _ = orthogonal_procrustes(coords_i, coords_j)
-                coords_j = coords_j @ R.T
-                # Calculate RMSD after rotation
-                rmsd = np.sqrt(np.mean((coords_i - coords_j) ** 2))
-                if rmsd < threshold:
-                    selected_conformers.remove(j)
+    
+    # Vectorized pairwise RMSD comparison
+    n_selected = len(selected_conformers)
+    if n_selected > 1:
+        # Pre-allocate arrays for selected conformers
+        selected_coords = np.zeros((n_selected, len(initial_coords)))
+        for i, atoms in enumerate(selected_conformers):
+            coords = atoms.get_positions()
+            COM = np.mean(coords, axis=0)
+            selected_coords[i] = (coords - COM).reshape(-1)
+        
+        # Compute pairwise RMSD matrix
+        rmsd_matrix = np.zeros((n_selected, n_selected))
+        for i in range(n_selected):
+            for j in range(i+1, n_selected):
+                R, _ = orthogonal_procrustes(selected_coords[i:i+1].T, selected_coords[j:j+1].T)
+                rotated_j = selected_coords[j] @ R.T
+                rmsd = np.sqrt(np.mean((selected_coords[i] - rotated_j) ** 2))
+                rmsd_matrix[i,j] = rmsd_matrix[j,i] = rmsd
+        
+        # Find unique conformers based on RMSD threshold
+        to_keep = np.ones(n_selected, dtype=bool)
+        for i in range(n_selected):
+            if to_keep[i]:
+                to_keep[rmsd_matrix[i] < threshold] = False
+                to_keep[i] = True
+        
+        selected_conformers = [conf for i, conf in enumerate(selected_conformers) if to_keep[i]]
+    
+    print(f"After filtering based on RMSD {threshold}, {len(selected_conformers)} unique conformers remain.")
     return selected_conformers
 
 def energy_filter(images,energy):
