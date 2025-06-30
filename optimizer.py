@@ -28,6 +28,52 @@ def optimize_single_conformer(args):
     atoms.info["energy"] = energy
     return atoms
 
+def optimize_geo_DFT(atoms, functional="wb97x-d3bj", basis="def2-tzvp", charge=0, spin=0, verbose=0):
+    """
+    Optimize geometry of an ASE Atoms object using PySCF DFT.
+    Returns (optimized ASE Atoms, final energy in Hartree).
+    """
+    from pyscf import gto, dft
+    from pyscf.geomopt.geometric_solver import optimize
+    import numpy as np
+
+    # Convert ASE Atoms to PySCF atom string
+    symbols = atoms.get_chemical_symbols()
+    positions = atoms.get_positions()
+    atom_lines = [f"{sym} {x:.8f} {y:.8f} {z:.8f}" for sym, (x, y, z) in zip(symbols, positions)]
+    atom_string = "\n".join(atom_lines)
+
+    mol = gto.Mole()
+    mol.atom = atom_string
+    mol.basis = basis
+    mol.charge = charge
+    mol.spin = spin
+    mol.verbose = verbose
+    mol.build()
+
+    mf = dft.RKS(mol)
+    mf.conv_tol = 1e-6
+    mf.max_cycle = 200
+    mf.level_shift = 0.3
+    mf.damp = 0.2
+    mf.init_guess = 'minao'
+    mf.xc = functional
+
+    mol_opt = optimize(mf, maxsteps=1000)
+
+    # Get final energy
+    mf_final = dft.RKS(mol_opt)
+    mf_final.xc = functional
+    energy = mf_final.kernel()
+
+    # Prepare new ASE Atoms object
+    coords = mol_opt.atom_coords() * 0.52917721092  # Bohr to Angstrom
+    symbols = [atom[0] for atom in mol_opt._atom]
+    atoms_opt = Atoms(symbols=symbols, positions=coords)
+
+    return atoms_opt, energy
+
+
 def optimize_conformers(conformers, calculator, nprocs=None):
     if nprocs is None:
         nprocs = mp.cpu_count()  
