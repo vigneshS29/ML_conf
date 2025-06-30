@@ -4,6 +4,8 @@ from ase.optimize import BFGS
 from scipy.spatial.distance import pdist, squareform
 from ase.optimize import BFGS
 from scipy.linalg import orthogonal_procrustes
+from pyscf import gto, dft
+from pyscf.geomopt.geometric_solver import optimize
 
 from mol import *
 
@@ -29,15 +31,7 @@ def optimize_single_conformer(args):
     return atoms
 
 def optimize_geo_DFT(atoms, functional="wb97x-d3bj", basis="def2-tzvp", charge=0, spin=0, verbose=0):
-    """
-    Optimize geometry of an ASE Atoms object using PySCF DFT.
-    Returns (optimized ASE Atoms, final energy in Hartree).
-    """
-    from pyscf import gto, dft
-    from pyscf.geomopt.geometric_solver import optimize
-    import numpy as np
 
-    # Convert ASE Atoms to PySCF atom string
     symbols = atoms.get_chemical_symbols()
     positions = atoms.get_positions()
     atom_lines = [f"{sym} {x:.8f} {y:.8f} {z:.8f}" for sym, (x, y, z) in zip(symbols, positions)]
