@@ -43,7 +43,7 @@ def main():
     mol.build()
 
     # Robust SCF settings
-    mf = dft.RKS(mol)
+    mf = dft.UKS(mol)
     mf.conv_tol = 1e-6
     mf.max_cycle = 200
     mf.level_shift = 0.3
@@ -54,7 +54,7 @@ def main():
     mol_opt = optimize(mf, maxsteps=1000)
 
     # Get final energy
-    mf_final = dft.RKS(mol_opt)
+    mf_final = dft.UKS(mol_opt)
     mf_final.xc = args.functional
     energy = mf_final.kernel()
 
